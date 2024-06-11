@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+
+<ehcache>
+
+	<diskStore path="java.io.tmpdir" />
+
+	<defaultCache maxEntriesLocalHeap="0" eternal="false"
+		timeToIdleSeconds="5" timeToLiveSeconds="10"
+		memoryStoreEvictionPolicy="LRU" statistics="true">
+		<persistence strategy="none" />
+	</defaultCache>
+
+	<cache name="users" maxEntriesLocalHeap="4000" eternal="false"
+		timeToIdleSeconds="60" timeToLiveSeconds="120">
+		<persistence strategy="none" />
+	</cache>
+
+	<cache name="org.hibernate.cache.spi.UpdateTimestampsCache"
+		maxEntriesLocalHeap="0" eternal="false">
+		<persistence strategy="none" />
+	</cache>
+	
+
+	<cache name="signature" maxEntriesLocalHeap="0"
+		timeToIdleSeconds="1" timeToLiveSeconds="1" eternal="false"
+		maxElementsInMemory="0" overflowToDisk="false" />
+
+
+</ehcache>

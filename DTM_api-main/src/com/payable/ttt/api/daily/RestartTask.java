@@ -1,0 +1,132 @@
+package com.payable.ttt.api.daily;
+
+import java.io.IOException;
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.TimeZone;
+import java.util.UUID;
+
+import javax.servlet.annotation.WebServlet;
+
+import org.hibernate.HibernateException;
+
+import com.fasterxml.uuid.Generators;
+import com.payable.ttt.config.SysConfigParam;
+import com.payable.ttt.dbManager.DB;
+import com.payable.ttt.dto.CommonSearchRequest;
+import com.payable.ttt.dto.MailSendElem;
+import com.payable.ttt.dto.daily.DailyTaskDTO;
+
+import com.payable.ttt.exception.EnumException;
+
+import com.payable.ttt.exception.TeamTimeTrackerException;
+//import com.payable.ttt.formats.WelcomeEmailComposerV1;
+import com.payable.ttt.model.ORMTask;
+import com.payable.ttt.model.ORMTaskEnd;
+import com.payable.ttt.model.ORMTaskStart;
+import com.payable.ttt.model.ORMUser;
+//import com.payable.ttt.util.CheckSumKeyManagementUtil;
+import com.payable.ttt.util.CryptoUtil;
+import com.payable.ttt.util.DateUtil;
+//import com.payable.ttt.util.MailHelperV2;
+//import com.payable.ttt.util.PasswordGenerator;
+//import com.payable.ttt.util.StringValidationsUtil;
+
+@WebServlet("/task/restart")
+public class RestartTask extends DailyTasks {
+
+	private static final long serialVersionUID = 221212101112L;
+
+	@Override
+	protected String processDailyTaskUpdate(DailyTaskDTO dt, ORMUser user, String ipAddress) throws TeamTimeTrackerException {
+
+		boolean isActiveTaskExists = dbm_Task.isExists(ORMTask.class, "user_id", user.getId(), "is_active", 1);
+		if (isActiveTaskExists) {
+			log.error("(2302201951)Active Task Found for the user = " + user.getId());
+			throw new TeamTimeTrackerException(EnumException.ACTIVE_TASK_FIND);
+		}
+		
+		Date enterdDateTime = null;
+		try {
+			enterdDateTime = DateUtil.toDate(dt.getEnterd_start_time());
+		} catch (ParseException e1) {
+			e1.printStackTrace();
+			log.error("(2302202159)Date format incorrect = " + dt.getEnterd_start_time());
+			throw new TeamTimeTrackerException(EnumException.INVALIED_DATE_FORMAT);
+		}
+		
+		String taskID=dt.getId();
+//		DB dbReadTask = new DB(hibernateFactory);
+//		dbReadTask.init();
+		db.init();
+		String hqlTask="From ORMTask where is_active="+ ORMTask.STATUS_ON_HOLD +" and id = '" + taskID + "'";
+		List<ORMTask> foundActive =db.read(hqlTask);
+		if(foundActive==null) {
+			log.error("(2302202159)Date format incorrect = " + dt.getEnterd_start_time());
+			throw new TeamTimeTrackerException(EnumException.NO_ON_HOLD_TASK_FIND);
+		}
+		
+		ORMTask task =foundActive.get(0);
+		
+		
+		String hqlTaskEndTime= "From ORMTaskEnd where is_active="+ ORMTask.STATUS_ON_HOLD +" and task = '" + taskID + "'";
+		List<ORMTaskEnd> lastTaskFound=db.read(hqlTaskEndTime);
+		
+		ORMTaskEnd taskEndTime= lastTaskFound.get(0);
+		
+		
+		System.out.println( " ========> " + dt.getEnterd_start_time()  + " =====> " + enterdDateTime);
+
+		//ORMTask task = new ORMTask();
+//		task.setAct_id(dt.getAct_id());
+//		task.setCat_id(dt.getCat_id());
+//		task.setPro_id(dt.getPro_id());
+//		task.setUser_id(user.getId());
+//		task.setTask_detail(dt.getTask_detail());
+		taskEndTime.setIs_active(ORMTask.STATUS_DEACTIVATED);
+		task.setIs_active(ORMTask.STATUS_ACTIVATED);
+		//task.setInit_ts(new Date());
+
+		if(enterdDateTime==null) new Date();
+		ORMTaskStart taskStart = new ORMTaskStart();
+		taskStart.setEnterd_time(enterdDateTime);
+		taskStart.setIs_active(ORMTask.STATUS_ACTIVATED);
+		taskStart.setSystem_time(new Date());
+		taskStart.setTask(task);
+
+		if(taskEndTime.getEnterd_time().after(taskStart.getEnterd_time())){
+			log.error("(2302281429) = Invalid Task Resume Date and Time " );
+			throw new TeamTimeTrackerException(EnumException.INVALID_TASK_RESTART_TIME);
+		}
+		
+		
+//		DB db = new DB(hibernateFactory);
+//		db.init();
+		try {
+			// db.update(copUser);
+			db.update(task);
+			db.update(taskEndTime);
+			db.write(taskStart);
+			db.commitClose();
+		} catch (HibernateException e) {
+			db.rollbackClose();
+		} finally {
+		//	db.finallyClose();
+//			
+//			dbReadTask.finallyClose();
+		}
+
+		if(task.getId()==null) {
+			String sbRsp = "{\"id\":\"" + task.getId() + "\"";
+			sbRsp = sbRsp + ",\r\n\"status\":false}";
+			return sbRsp;
+		}else {
+			String sbRsp = "{\"id\":\"" + task.getId() + "\"";
+			sbRsp = sbRsp + ",\r\n\"status\":true}";
+			return sbRsp;
+		}
+	}
+
+}
